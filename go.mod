@@ -1,6 +1,6 @@
-module service-utilities
+module github.com/viktor8881/service-utilities
 
-go 1.22
+go 1.22.4
 
 require (
 	github.com/go-playground/form v3.1.4+incompatible
