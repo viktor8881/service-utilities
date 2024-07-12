@@ -1,4 +1,4 @@
-package http
+package server
 
 type DecodeEncodeError struct {
 	Err       error
