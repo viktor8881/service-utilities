@@ -61,7 +61,7 @@ func (t *Transport) decodeRequest(r *http.Request, inDto any) error {
 		}
 	}
 
-	if r.Method == http.MethodGet {
+	if r.Method == http.MethodGet || r.Method == http.MethodDelete {
 		decoder := form.NewDecoder()
 		if err := decoder.Decode(inDto, r.URL.Query()); err != nil {
 			return &DecodeEncodeError{
