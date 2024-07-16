@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"reflect"
+	"strings"
 	"time"
 )
 
@@ -118,4 +121,26 @@ func (c *SimpleClient) Put(ctx context.Context, endpoint string, body interface{
 	}
 
 	return c.httpClient.Do(req)
+}
+
+func BuildURL(template string, input interface{}) (string, error) {
+	v := reflect.ValueOf(input)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	t := v.Type()
+
+	if t.Kind() != reflect.Struct {
+		return "", fmt.Errorf("input is not a struct or pointer to a struct")
+	}
+
+	for i := 0; i < t.NumField(); i++ {
+		fieldName := t.Field(i).Name
+		placeholder := "{" + fieldName + "}"
+		placeholderLower := "{" + strings.ToLower(fieldName) + "}"
+		fieldValue := fmt.Sprintf("%v", v.FieldByName(fieldName).Interface())
+		template = strings.ReplaceAll(template, placeholder, fieldValue)
+		template = strings.ReplaceAll(template, placeholderLower, fieldValue)
+	}
+	return template, nil
 }

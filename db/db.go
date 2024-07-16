@@ -5,7 +5,6 @@ import (
 	"database/sql"
 
 	"errors"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
@@ -43,12 +42,14 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) Get(ctx context.Context, name string, query string, dest interface{}, args ...interface{}) error {
-	db.logger.Info(fmt.Sprintf("sql: %s", name), zap.String("query", query), zap.Any("args", args))
+	fields := []zap.Field{zap.String("command", name), zap.String("query", query), zap.Any("args", args)}
+	db.logger.Info("execute sql:", fields...)
 
 	err := db.db.GetContext(ctx, dest, query, args...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			db.logger.Error(fmt.Sprintf("sql: Failed to execute query %s", name), zap.String("query", query), zap.Error(err), zap.Any("args", args))
+			fields = append(fields, zap.Error(err))
+			db.logger.Error("failed sql", fields...)
 		}
 
 		return err
@@ -58,11 +59,13 @@ func (db *DB) Get(ctx context.Context, name string, query string, dest interface
 }
 
 func (db *DB) FetchAll(ctx context.Context, name string, query string, dest interface{}, args ...interface{}) error {
-	db.logger.Info(fmt.Sprintf("sql: %s", name), zap.String("query", query), zap.Any("args", args))
+	fields := []zap.Field{zap.String("command", name), zap.String("query", query), zap.Any("args", args)}
+	db.logger.Info("execute sql:", fields...)
 
 	err := db.db.SelectContext(ctx, dest, query, args...)
 	if err != nil {
-		db.logger.Error(fmt.Sprintf("sql: Failed to execute query %s", name), zap.String("query", query), zap.Error(err), zap.Any("args", args))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql:", fields...)
 		return err
 	}
 
@@ -70,17 +73,20 @@ func (db *DB) FetchAll(ctx context.Context, name string, query string, dest inte
 }
 
 func (db *DB) Create(ctx context.Context, name string, query string, args ...interface{}) (int64, error) {
-	db.logger.Info("sql: Executing SQL command", zap.String("command", name), zap.String("query", query), zap.Any("args", args))
+	fields := []zap.Field{zap.String("command", name), zap.String("query", query), zap.Any("args", args)}
+	db.logger.Info("execute sql:", fields...)
 
 	result, err := db.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		db.logger.Error("sql: Failed to execute command", zap.String("command", name), zap.String("query", query), zap.Error(err), zap.Any("args", args))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql:", fields...)
 		return 0, err
 	}
 
 	newID, err := result.LastInsertId()
 	if err != nil {
-		db.logger.Error("sql: Failed to get last insert newID", zap.String("command", name), zap.String("query", query), zap.Error(err), zap.Any("args", args))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql: Failed to get last insert newID", fields...)
 		return 0, err
 
 	}
@@ -89,17 +95,20 @@ func (db *DB) Create(ctx context.Context, name string, query string, args ...int
 }
 
 func (db *DB) Update(ctx context.Context, name string, query string, args ...interface{}) (int64, error) {
-	db.logger.Info("sql: Executing SQL command", zap.String("command", name), zap.String("query", query), zap.Any("args", args))
+	fields := []zap.Field{zap.String("command", name), zap.String("query", query), zap.Any("args", args)}
+	db.logger.Info("execute sql:", fields...)
 
 	result, err := db.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		db.logger.Error("sql: Failed to execute command", zap.String("command", name), zap.String("query", query), zap.Error(err), zap.Any("args", args))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql:", fields...)
 		return 0, err
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		db.logger.Error("sql: Failed to get rows affected", zap.String("command", name), zap.String("query", query), zap.Error(err), zap.Any("args", args))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql: Failed to get rows affected", fields...)
 		return 0, err
 	}
 
@@ -107,17 +116,20 @@ func (db *DB) Update(ctx context.Context, name string, query string, args ...int
 }
 
 func (db *DB) Delete(ctx context.Context, name string, query string, args ...interface{}) (int64, error) {
-	db.logger.Info("sql: Executing SQL command", zap.String("command", name), zap.String("query", query), zap.Any("args", args))
+	fields := []zap.Field{zap.String("command", name), zap.String("query", query), zap.Any("args", args)}
+	db.logger.Info("execute sql:", fields...)
 
 	result, err := db.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		db.logger.Error("sql: Failed to execute command", zap.String("command", name), zap.String("query", query), zap.Error(err), zap.Any("args", args))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql:", fields...)
 		return 0, err
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		db.logger.Error("sql: Failed to get rows affected", zap.String("command", name), zap.String("query", query), zap.Error(err), zap.Any("args", args))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql: Failed to get rows affected", fields...)
 		return 0, err
 	}
 
@@ -127,34 +139,38 @@ func (db *DB) Delete(ctx context.Context, name string, query string, args ...int
 type TxFunc func(tx *sql.Tx) error
 
 func (db *DB) ExecuteTx(ctx context.Context, name string, txFunc TxFunc) error {
-	db.logger.Info("sql: Starting transaction", zap.String("transaction", name))
+	fields := []zap.Field{zap.String("command", name)}
+	db.logger.Info("execute sql:", fields...)
 
 	tx, err := db.db.BeginTx(ctx, nil)
 	if err != nil {
-		db.logger.Error("sql: Failed to begin transaction", zap.String("transaction", name), zap.Error(err))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql: Failed to begin transaction", fields...)
 		return err
 	}
 
 	if err := txFunc(tx); err != nil {
-		db.logger.Error("sql: Failed to execute transaction function", zap.String("transaction", name), zap.Error(err))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql: Failed to execute transaction function", fields...)
 		errRollback := tx.Rollback()
 		if errRollback != nil {
-			db.logger.Error("sql: Failed to rollback transaction", zap.String("transaction", name), zap.Error(err))
+			db.logger.Error("failed sql: Failed to rollback transaction", zap.String("command", name), zap.Error(err))
 		}
 
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
-		db.logger.Error("sql: Failed to commit transaction", zap.String("transaction", name), zap.Error(err))
+		fields = append(fields, zap.Error(err))
+		db.logger.Error("failed sql: Failed to commit transaction function", fields...)
 		errRollback := tx.Rollback()
 		if errRollback != nil {
-			db.logger.Error("sql: Failed to rollback transaction", zap.String("transaction", name), zap.Error(err))
+			db.logger.Error("failed sql: Failed to rollback transaction", zap.String("command", name), zap.Error(err))
 		}
 
 		return err
 	}
 
-	db.logger.Info("sql: Transaction executed successfully", zap.String("transaction", name))
+	db.logger.Info("success sql: Transaction executed successfully", fields...)
 	return nil
 }
