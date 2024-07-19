@@ -54,57 +54,31 @@ func (t *Transport) encodeResponse(res http.ResponseWriter, outDto any) error {
 
 func (t *Transport) decodeRequest(r *http.Request, inDto any) error {
 	if reflect.TypeOf(inDto).Kind() != reflect.Ptr {
-		return &DecodeEncodeError{
-			Err:       errors.New("input must be a pointer"),
-			Mess2user: "unable to decode request",
-			Code2user: http.StatusInternalServerError,
+		return &CustomError{
+			Err:         errors.New("input must be a pointer"),
+			HttpCode:    http.StatusInternalServerError,
+			HttpMessage: "unable to decode request",
 		}
 	}
 
 	if r.Method == http.MethodGet || r.Method == http.MethodDelete {
 		decoder := form.NewDecoder()
 		if err := decoder.Decode(inDto, r.URL.Query()); err != nil {
-			return &DecodeEncodeError{
-				Err:       err,
-				Mess2user: "unable to decode request",
-				Code2user: http.StatusBadRequest,
+			return &CustomError{
+				Err:         err,
+				HttpMessage: "unable to decode request",
+				HttpCode:    http.StatusBadRequest,
 			}
 		}
 	} else {
 		if err := json.NewDecoder(r.Body).Decode(inDto); err != nil {
-			return &DecodeEncodeError{
-				Err:       err,
-				Mess2user: "unable to decode request",
-				Code2user: http.StatusInternalServerError,
+			return &CustomError{
+				Err:         err,
+				HttpMessage: "unable to decode request",
+				HttpCode:    http.StatusInternalServerError,
 			}
 		}
 	}
 
 	return nil
 }
-
-//
-//func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) (int, string) {
-//	var decodeEncodeError *DecodeEncodeError
-//	var methodNotAllowedError *MethodNotAllowedError
-//
-//	var code int
-//	var message string
-//
-//	switch {
-//	case errors.Is(err, context.Canceled):
-//		code = http.StatusRequestTimeout
-//		message = "request canceled"
-//	case errors.Is(err, context.DeadlineExceeded):
-//		code = http.StatusGatewayTimeout
-//		message = "request deadline exceeded"
-//	case errors.As(err, &methodNotAllowedError):
-//		code = http.StatusMethodNotAllowed
-//		message = "method not allowed"
-//	case errors.As(err, &decodeEncodeError):
-//		code = decodeEncodeError.Code2user
-//		message = decodeEncodeError.Mess2user
-//	}
-//
-//	return code, message
-//}

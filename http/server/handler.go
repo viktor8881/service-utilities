@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"go.uber.org/zap"
 	"net/http"
 	"reflect"
@@ -32,7 +33,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logger.Info("receive request",
 			zap.String("url", r.Method+": "+r.URL.String()),
 		)
-		h.errorFn(w, r, &MethodNotAllowedError{}, h.logger)
+
+		err := &CustomError{
+			Err:         errors.New("method not allowed"),
+			HttpCode:    http.StatusMethodNotAllowed,
+			HttpMessage: "method not allowed",
+		}
+
+		h.errorFn(w, r, err, h.logger)
 		return
 	}
 
