@@ -24,11 +24,11 @@ type DB struct {
 	logger *zap.Logger
 }
 
-func NewDb(ctx context.Context, cfg DatabaseConfig, logger *zap.Logger) (*DB, error) {
+func NewDb(ctx context.Context, cfg DatabaseConfig, logger *zap.Logger) (*DB, func(), error) {
 	db, err := sqlx.ConnectContext(ctx, cfg.DBType, cfg.DSN)
 	if err != nil {
 		logger.Error("Failed to connect to database", zap.String("database_type", cfg.DBType), zap.Error(err))
-		return nil, err
+		return nil, nil, err
 	}
 
 	db.SetMaxOpenConns(cfg.SetMaxOpenConns)
@@ -37,12 +37,20 @@ func NewDb(ctx context.Context, cfg DatabaseConfig, logger *zap.Logger) (*DB, er
 
 	if err = db.Ping(); err != nil {
 		logger.Error("Failed to ping database", zap.String("database_type", cfg.DBType), zap.Error(err))
-		return nil, err
+		return nil, nil, err
 	}
 
 	logger.Info("Database connection established successfully", zap.String("database_type", cfg.DBType))
 
-	return &DB{db: db, logger: logger}, nil
+	closeFunc := func() {
+		if err := db.Close(); err != nil {
+			logger.Error("close db connection error", zap.Error(err))
+		} else {
+			logger.Info("close db connection success")
+		}
+	}
+
+	return &DB{db: db, logger: logger}, closeFunc, nil
 }
 
 func (db *DB) Close() error {

@@ -123,6 +123,10 @@ func (c *SimpleClient) Put(ctx context.Context, endpoint string, body interface{
 	return c.httpClient.Do(req)
 }
 
+func (c *SimpleClient) Close() {
+	c.httpClient.CloseIdleConnections()
+}
+
 func BuildURL(template string, input interface{}) (string, error) {
 	v := reflect.ValueOf(input)
 	if v.Kind() == reflect.Ptr {
