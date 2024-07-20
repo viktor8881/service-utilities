@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"errors"
 	_ "github.com/go-sql-driver/mysql"
@@ -11,8 +12,11 @@ import (
 )
 
 type DatabaseConfig struct {
-	DSN    string
-	DBType string // Тип базы данных, например "postgres", "mysql" и т.д.
+	DSN                string
+	DBType             string // Тип базы данных, например "postgres", "mysql" и т.д.
+	SetMaxOpenConns    int
+	SetMaxIdleConns    int
+	SetConnMaxLifetime time.Duration
 }
 
 type DB struct {
@@ -26,6 +30,10 @@ func NewDb(ctx context.Context, cfg DatabaseConfig, logger *zap.Logger) (*DB, er
 		logger.Error("Failed to connect to database", zap.String("database_type", cfg.DBType), zap.Error(err))
 		return nil, err
 	}
+
+	db.SetMaxOpenConns(cfg.SetMaxOpenConns)
+	db.SetMaxIdleConns(cfg.SetMaxIdleConns)
+	db.SetConnMaxLifetime(cfg.SetConnMaxLifetime)
 
 	if err = db.Ping(); err != nil {
 		logger.Error("Failed to ping database", zap.String("database_type", cfg.DBType), zap.Error(err))
@@ -140,7 +148,7 @@ type TxFunc func(tx *sql.Tx) error
 
 func (db *DB) ExecuteTx(ctx context.Context, name string, txFunc TxFunc) error {
 	fields := []zap.Field{zap.String("command", name)}
-	db.logger.Info("execute sql:", fields...)
+	db.logger.Info("execute sql in transaction:", fields...)
 
 	tx, err := db.db.BeginTx(ctx, nil)
 	if err != nil {

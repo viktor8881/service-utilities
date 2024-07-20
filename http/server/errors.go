@@ -16,7 +16,7 @@ type CustomError struct {
 }
 
 func (e *CustomError) Error() string {
-	return fmt.Sprintf("httpCode2user: %d; httpBody2user: %s; error: %s", e.HttpMessage, e.Err.Error())
+	return fmt.Sprintf("httpCode2user: %d; httpBody2user: %s; error: %s", e.HttpCode, e.HttpMessage, e.Err.Error())
 }
 
 func ErrorHandler(w http.ResponseWriter,
