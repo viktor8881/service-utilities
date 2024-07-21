@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"time"
@@ -27,8 +29,13 @@ func NewSimpleClient(baseURL string, timeout time.Duration, transport http.Round
 	}
 }
 
-func (c *SimpleClient) Get(ctx context.Context, endpoint string, headers map[string]string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
+func (c *SimpleClient) Get(ctx context.Context, endpoint string, in interface{}, headers map[string]string) (*http.Response, error) {
+	pathUrl, err := BuildURL(c.baseURL+endpoint, in)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pathUrl, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -37,27 +44,16 @@ func (c *SimpleClient) Get(ctx context.Context, endpoint string, headers map[str
 		req.Header.Set(key, value)
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body := new(bytes.Buffer)
-		body.ReadFrom(resp.Body)
-
-		return resp, &ClientResponseNot200Error{
-			ClientResponseCode: resp.StatusCode,
-			ClientResponseBody: body.String(),
-			Err:                errors.New("Response status code is not 2xx"),
-		}
-	}
-
-	return resp, nil
+	return c.doRequest(req)
 }
 
-func (c *SimpleClient) Delete(ctx context.Context, endpoint string, headers map[string]string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+endpoint, nil)
+func (c *SimpleClient) Delete(ctx context.Context, endpoint string, in interface{}, headers map[string]string) (*http.Response, error) {
+	pathUrl, err := BuildURL(c.baseURL+endpoint, in)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, pathUrl, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -66,23 +62,7 @@ func (c *SimpleClient) Delete(ctx context.Context, endpoint string, headers map[
 		req.Header.Set(key, value)
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body := new(bytes.Buffer)
-		body.ReadFrom(resp.Body)
-
-		return resp, &ClientResponseNot200Error{
-			ClientResponseCode: resp.StatusCode,
-			ClientResponseBody: body.String(),
-			Err:                errors.New("response status code is not 2xx"),
-		}
-	}
-
-	return resp, nil
+	return c.doRequest(req)
 }
 
 func (c *SimpleClient) Post(ctx context.Context, endpoint string, body interface{}, headers map[string]string) (*http.Response, error) {
@@ -101,7 +81,7 @@ func (c *SimpleClient) Post(ctx context.Context, endpoint string, body interface
 		req.Header.Set(key, value)
 	}
 
-	return c.httpClient.Do(req)
+	return c.doRequest(req)
 }
 
 func (c *SimpleClient) Put(ctx context.Context, endpoint string, body interface{}, headers map[string]string) (*http.Response, error) {
@@ -120,11 +100,34 @@ func (c *SimpleClient) Put(ctx context.Context, endpoint string, body interface{
 		req.Header.Set(key, value)
 	}
 
-	return c.httpClient.Do(req)
+	return c.doRequest(req)
 }
 
 func (c *SimpleClient) Close() {
 	c.httpClient.CloseIdleConnections()
+}
+
+func (c *SimpleClient) doRequest(req *http.Request) (*http.Response, error) {
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		return resp, &ClientResponseNot200Error{
+			ClientResponseCode: resp.StatusCode,
+			ClientResponseBody: string(body),
+			Err:                errors.New("Response status code is not 2xx"),
+		}
+	}
+
+	return resp, nil
 }
 
 func BuildURL(template string, input interface{}) (string, error) {
@@ -138,13 +141,31 @@ func BuildURL(template string, input interface{}) (string, error) {
 		return "", fmt.Errorf("input is not a struct or pointer to a struct")
 	}
 
-	for i := 0; i < t.NumField(); i++ {
-		fieldName := t.Field(i).Name
-		placeholder := "{" + fieldName + "}"
-		placeholderLower := "{" + strings.ToLower(fieldName) + "}"
-		fieldValue := fmt.Sprintf("%v", v.FieldByName(fieldName).Interface())
-		template = strings.ReplaceAll(template, placeholder, fieldValue)
-		template = strings.ReplaceAll(template, placeholderLower, fieldValue)
+	isPathParam := strings.Contains(template, "{")
+	if isPathParam {
+		for i := 0; i < t.NumField(); i++ {
+			fieldName := t.Field(i).Name
+			placeholderLower := "{" + strings.ToLower(fieldName) + "}"
+			fieldValue := fmt.Sprintf("%v", v.FieldByName(fieldName).Interface())
+			template = strings.ReplaceAll(template, placeholderLower, fieldValue)
+		}
+	} else {
+		// Построение URL с параметрами запроса
+		url, err := url.Parse(template)
+		if err != nil {
+			return template, err
+		}
+
+		query := url.Query()
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			value := v.Field(i).Interface()
+			query.Add(strings.ToLower(field.Name), fmt.Sprintf("%v", value))
+		}
+
+		url.RawQuery = query.Encode()
+		template = url.String()
 	}
+
 	return template, nil
 }
