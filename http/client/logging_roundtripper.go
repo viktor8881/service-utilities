@@ -1,7 +1,9 @@
 package simplehttp
 
 import (
+	"bytes"
 	"go.uber.org/zap"
+	"io"
 	"net/http"
 	"time"
 )
@@ -24,11 +26,22 @@ func NewLoggingRoundTripper(proxied http.RoundTripper, logger *zap.Logger, turnO
 func (lrt *LoggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 
+	var requestBody []byte
+	if req.Body != nil {
+		requestBody, _ = io.ReadAll(req.Body)
+		req.Body = io.NopCloser(bytes.NewBuffer(requestBody)) // Восстанавливаем тело запроса для дальнейшего использования
+	}
+
+	lrt.Logger.Info("--> inner request send",
+		zap.String("url", req.Method+": "+req.URL.String()),
+		zap.String("requestBody", string(requestBody)),
+	)
+
 	resp, err := lrt.Proxied.RoundTrip(req)
 	if err != nil {
-		lrt.Logger.Info("inner request error",
-			zap.String("Method", req.Method),
-			zap.String("URL", req.URL.String()),
+		lrt.Logger.Info("--> inner request error",
+			zap.String("url", req.Method+": "+req.URL.String()),
+			zap.String("requestBody", string(requestBody)),
 			zap.Error(err),
 		)
 		return nil, err
@@ -36,10 +49,10 @@ func (lrt *LoggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 
 	if lrt.TurnOnAll {
 		duration := time.Since(start)
-		lrt.Logger.Info("inner request result",
-			zap.String("Method", req.Method),
-			zap.String("URL", req.URL.String()),
-			zap.String("Status", resp.Status),
+		lrt.Logger.Info("--> inner request executed",
+			zap.String("url", req.Method+": "+req.URL.String()),
+			zap.String("requestBody", string(requestBody)),
+			zap.String("StatusResponse", resp.Status),
 			zap.Duration("Duration", duration),
 		)
 	}

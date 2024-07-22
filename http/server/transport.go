@@ -14,6 +14,8 @@ type Transport struct {
 	mux *http.ServeMux
 }
 
+type Middleware func(http.Handler) http.Handler
+
 func NewTransport(mux *http.ServeMux) *Transport {
 	return &Transport{
 		mux: mux,
@@ -27,6 +29,7 @@ func (t *Transport) AddEndpoint(
 	handlerFn func(ctx context.Context, in interface{}) (interface{}, error),
 	logger *zap.Logger,
 	fErrorHandler func(w http.ResponseWriter, r *http.Request, err error, logger *zap.Logger),
+	middlewares ...Middleware,
 ) {
 	h := &handler{
 		path,
@@ -39,7 +42,9 @@ func (t *Transport) AddEndpoint(
 		logger,
 	}
 
-	t.mux.Handle(path, h)
+	wrappedHandler := applyMiddleware(h, middlewares...)
+
+	t.mux.Handle(path, wrappedHandler)
 }
 
 func (t *Transport) encodeResponse(res http.ResponseWriter, outDto any) error {
@@ -81,4 +86,11 @@ func (t *Transport) decodeRequest(r *http.Request, inDto any) error {
 	}
 
 	return nil
+}
+
+func applyMiddleware(h http.Handler, middlewares ...Middleware) http.Handler {
+	for _, middleware := range middlewares {
+		h = middleware(h)
+	}
+	return h
 }

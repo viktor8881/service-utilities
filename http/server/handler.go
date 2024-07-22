@@ -30,10 +30,6 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if r.Method != h.method {
-		h.logger.Info("receive request",
-			zap.String("url", r.Method+": "+r.URL.String()),
-		)
-
 		err := &CustomError{
 			Err:         errors.New("method not allowed"),
 			HttpCode:    http.StatusMethodNotAllowed,
@@ -47,18 +43,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	inDto := reflect.New(reflect.TypeOf(h.in).Elem()).Interface()
 	if h.in != nil {
 		if err := h.decodeFn(r, inDto); err != nil {
-			h.logger.Info("receive request",
-				zap.String("url", r.Method+": "+r.URL.String()),
-			)
 			h.errorFn(w, r, err, h.logger)
 			return
 		}
 	}
-
-	h.logger.Info("receive request",
-		zap.String("url", r.Method+": "+r.URL.String()),
-		zap.Any("body", inDto),
-	)
 
 	outDto, err := h.handlerFn(ctx, inDto)
 	if err != nil {
