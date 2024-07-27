@@ -28,7 +28,6 @@ func (t *Transport) AddEndpoint(
 	in interface{},
 	handlerFn func(ctx context.Context, in interface{}) (interface{}, error),
 	logger *zap.Logger,
-	fErrorHandler func(w http.ResponseWriter, r *http.Request, err error, logger *zap.Logger),
 	middlewares ...Middleware,
 ) {
 	h := &handler{
@@ -38,7 +37,7 @@ func (t *Transport) AddEndpoint(
 		t.decodeRequest,
 		handlerFn,
 		t.encodeResponse,
-		fErrorHandler,
+		ErrorHandler,
 		logger,
 	}
 

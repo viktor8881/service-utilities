@@ -22,7 +22,7 @@ type handler struct {
 	decodeFn  func(req *http.Request, inDto any) error
 	handlerFn func(ctx context.Context, in any) (any, error)
 	encodeFn  func(res http.ResponseWriter, outDto any) error
-	errorFn   ErrorHandlerFunc
+	errorFn   func(w http.ResponseWriter, r *http.Request, err error, logger *zap.Logger)
 	logger    *zap.Logger
 }
 
@@ -41,7 +41,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	inDto := reflect.New(reflect.TypeOf(h.in).Elem()).Interface()
-	if h.in != nil {
+	if h.in != nil && h.decodeFn != nil {
 		if err := h.decodeFn(r, inDto); err != nil {
 			h.errorFn(w, r, err, h.logger)
 			return

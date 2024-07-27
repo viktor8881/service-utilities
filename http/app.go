@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -16,10 +17,9 @@ type App struct {
 }
 
 func NewApp(addr string, logger *zap.Logger) *App {
-	mux := http.NewServeMux()
 	return &App{
 		Addr:   addr,
-		Mux:    mux,
+		Mux:    http.NewServeMux(),
 		Logger: logger,
 	}
 }
@@ -31,7 +31,7 @@ func (a *App) Run() {
 	}
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			a.Logger.Fatal("error when running server:", zap.Error(err))
 		}
 	}()

@@ -29,7 +29,7 @@ func (lrt *LoggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 	var requestBody []byte
 	if req.Body != nil {
 		requestBody, _ = io.ReadAll(req.Body)
-		req.Body = io.NopCloser(bytes.NewBuffer(requestBody)) // Восстанавливаем тело запроса для дальнейшего использования
+		req.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 	}
 
 	lrt.Logger.Info("--> inner request send",
@@ -44,12 +44,13 @@ func (lrt *LoggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 			zap.String("requestBody", string(requestBody)),
 			zap.Error(err),
 		)
+
 		return nil, err
 	}
 
 	if lrt.TurnOnAll {
 		duration := time.Since(start)
-		lrt.Logger.Info("--> inner request executed",
+		lrt.Logger.Info("--> inner request success",
 			zap.String("url", req.Method+": "+req.URL.String()),
 			zap.String("requestBody", string(requestBody)),
 			zap.String("StatusResponse", resp.Status),

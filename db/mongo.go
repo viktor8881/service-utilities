@@ -15,11 +15,11 @@ import (
 
 type MongoDB struct {
 	Client *mongo.Client
-	Coll   *mongo.Collection
+	dbName string
 	logger *zap.Logger
 }
 
-func NewMongoDb(ctx context.Context, cfg DatabaseConfig, collection string, logger *zap.Logger) (*MongoDB, func(), error) {
+func NewMongoDb(ctx context.Context, cfg DatabaseConfig, logger *zap.Logger) (*MongoDB, func(), error) {
 	dbName, err := extractDatabaseName(cfg.DSN)
 	if err != nil {
 		logger.Error("Failed to extract database name from DSN", zap.Error(err))
@@ -53,16 +53,15 @@ func NewMongoDb(ctx context.Context, cfg DatabaseConfig, collection string, logg
 		}
 	}
 
-	coll := client.Database(dbName).Collection(collection)
-
-	return &MongoDB{Client: client, Coll: coll, logger: logger}, closeFunc, nil
+	return &MongoDB{Client: client, dbName: dbName, logger: logger}, closeFunc, nil
 }
 
 func (db *MongoDB) Get(ctx context.Context, name string, collection string, dest interface{}, bsonFilter bson.M) error {
 	fields := []zap.Field{zap.String("command", name), zap.String("collection", collection), zap.Any("args", bsonFilter)}
 	db.logger.Info("Executing Get operation", fields...)
 
-	err := db.Coll.FindOne(ctx, bsonFilter).Decode(dest)
+	coll := db.Client.Database(db.dbName).Collection(collection)
+	err := coll.FindOne(ctx, bsonFilter).Decode(dest)
 	if err != nil {
 		if !errors.Is(err, mongo.ErrNoDocuments) {
 			db.logger.Error("Failed to execute Get operation", append(fields, zap.Error(err))...)
@@ -79,7 +78,8 @@ func (db *MongoDB) FetchAll(ctx context.Context, name string, collection string,
 	fields := []zap.Field{zap.String("command", name), zap.String("collection", collection), zap.Any("args", bsonFilter)}
 	db.logger.Info("Executing FetchAll operation", fields...)
 
-	cursor, err := db.Coll.Find(ctx, bsonFilter)
+	coll := db.Client.Database(db.dbName).Collection(collection)
+	cursor, err := coll.Find(ctx, bsonFilter)
 	if err != nil {
 		db.logger.Error("Failed to execute FetchAll operation", append(fields, zap.Error(err))...)
 		return err
@@ -96,10 +96,11 @@ func (db *MongoDB) FetchAll(ctx context.Context, name string, collection string,
 }
 
 func (db *MongoDB) Create(ctx context.Context, name string, collection string, document interface{}) (string, error) {
-	fields := []zap.Field{zap.String("command", name), zap.String("database", db.Coll.Name()), zap.String("collection", collection), zap.Any("document", document)}
+	fields := []zap.Field{zap.String("command", name), zap.String("database", db.dbName), zap.String("collection", collection), zap.Any("document", document)}
 	db.logger.Info("Executing Create operation", fields...)
 
-	result, err := db.Coll.InsertOne(ctx, document)
+	coll := db.Client.Database(db.dbName).Collection(collection)
+	result, err := coll.InsertOne(ctx, document)
 	if err != nil {
 		db.logger.Error("Failed to execute Create operation", append(fields, zap.Error(err))...)
 		return "", err
@@ -112,10 +113,11 @@ func (db *MongoDB) Create(ctx context.Context, name string, collection string, d
 }
 
 func (db *MongoDB) Update(ctx context.Context, name string, collection string, filter, update bson.M) (int64, error) {
-	fields := []zap.Field{zap.String("command", name), zap.String("database", db.Coll.Name()), zap.String("collection", collection), zap.Any("filter", filter), zap.Any("update", update)}
+	fields := []zap.Field{zap.String("command", name), zap.String("database", db.dbName), zap.String("collection", collection), zap.Any("filter", filter), zap.Any("update", update)}
 	db.logger.Info("Executing Update operation", fields...)
 
-	result, err := db.Coll.UpdateMany(ctx, filter, update)
+	coll := db.Client.Database(db.dbName).Collection(collection)
+	result, err := coll.UpdateMany(ctx, filter, update)
 	if err != nil {
 		db.logger.Error("Failed to execute Update operation", append(fields, zap.Error(err))...)
 		return 0, err
@@ -126,10 +128,11 @@ func (db *MongoDB) Update(ctx context.Context, name string, collection string, f
 }
 
 func (db *MongoDB) Delete(ctx context.Context, name string, collection string, filter bson.M) (int64, error) {
-	fields := []zap.Field{zap.String("command", name), zap.String("database", db.Coll.Name()), zap.String("collection", collection), zap.Any("filter", filter)}
+	fields := []zap.Field{zap.String("command", name), zap.String("database", db.dbName), zap.String("collection", collection), zap.Any("filter", filter)}
 	db.logger.Info("Executing Delete operation", fields...)
 
-	result, err := db.Coll.DeleteMany(ctx, filter)
+	coll := db.Client.Database(db.dbName).Collection(collection)
+	result, err := coll.DeleteMany(ctx, filter)
 	if err != nil {
 		db.logger.Error("Failed to execute Delete operation", append(fields, zap.Error(err))...)
 		return 0, err

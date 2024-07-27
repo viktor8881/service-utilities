@@ -123,7 +123,7 @@ func (c *SimpleClient) doRequest(req *http.Request) (*http.Response, error) {
 		return resp, &ClientResponseNot200Error{
 			ClientResponseCode: resp.StatusCode,
 			ClientResponseBody: string(body),
-			Err:                errors.New("Response status code is not 2xx"),
+			Err:                errors.New("response status code is not 200"),
 		}
 	}
 
@@ -143,6 +143,7 @@ func BuildURL(template string, input interface{}) (string, error) {
 
 	isPathParam := strings.Contains(template, "{")
 	if isPathParam {
+		// path params /user/{id}/profile/{name}
 		for i := 0; i < t.NumField(); i++ {
 			fieldName := t.Field(i).Name
 			placeholderLower := "{" + strings.ToLower(fieldName) + "}"
@@ -150,21 +151,21 @@ func BuildURL(template string, input interface{}) (string, error) {
 			template = strings.ReplaceAll(template, placeholderLower, fieldValue)
 		}
 	} else {
-		// Построение URL с параметрами запроса
-		url, err := url.Parse(template)
+		// query params url?id=1&name=John
+		dataUrl, err := url.Parse(template)
 		if err != nil {
 			return template, err
 		}
 
-		query := url.Query()
+		query := dataUrl.Query()
 		for i := 0; i < t.NumField(); i++ {
 			field := t.Field(i)
 			value := v.Field(i).Interface()
 			query.Add(strings.ToLower(field.Name), fmt.Sprintf("%v", value))
 		}
 
-		url.RawQuery = query.Encode()
-		template = url.String()
+		dataUrl.RawQuery = query.Encode()
+		template = dataUrl.String()
 	}
 
 	return template, nil
