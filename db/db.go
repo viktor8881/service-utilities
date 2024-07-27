@@ -53,10 +53,6 @@ func NewDb(ctx context.Context, cfg DatabaseConfig, logger *zap.Logger) (*DB, fu
 	return &DB{db: db, logger: logger}, closeFunc, nil
 }
 
-func (db *DB) Close() error {
-	return db.db.Close()
-}
-
 func (db *DB) Get(ctx context.Context, name string, query string, dest interface{}, args ...interface{}) error {
 	fields := []zap.Field{zap.String("command", name), zap.String("query", query), zap.Any("args", args)}
 	db.logger.Info("execute sql:", fields...)
