@@ -16,7 +16,12 @@ type CustomError struct {
 }
 
 func (e *CustomError) Error() string {
-	return fmt.Sprintf("httpCode2user: %d; httpBody2user: %s; error: %s", e.HttpCode, e.HttpMessage, e.Err.Error())
+	mess := fmt.Sprintf("httpCode2user: %d, httpBody2user: %s", e.HttpCode, e.HttpMessage)
+	if e.Err != nil {
+		mess += "; error: " + e.Err.Error()
+	}
+
+	return mess
 }
 
 func ErrorHandler(w http.ResponseWriter,
@@ -48,12 +53,17 @@ func ErrorHandler(w http.ResponseWriter,
 		bodyStr = r.URL.Query().Encode()
 	}
 
-	logger.Error(message,
+	zapFields := []zap.Field{
 		zap.String("url", r.Method+": "+r.URL.String()),
 		zap.String("body", bodyStr),
 		zap.Int("httpCode2user", code),
 		zap.String("httpBody2user", message),
-		zap.Error(err))
+	}
+	if err != nil {
+		zapFields = append(zapFields, zap.Error(err))
+	}
+
+	logger.Error(message, zapFields...)
 
 	w.WriteHeader(code)
 

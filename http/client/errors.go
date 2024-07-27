@@ -11,5 +11,10 @@ type ClientResponseNot200Error struct {
 }
 
 func (e *ClientResponseNot200Error) Error() string {
-	return fmt.Sprintf("ClientResponseNot200Error: code: %d, message: %s, error: %s", e.ClientResponseCode, e.ClientResponseBody, e.Err.Error())
+	mess := fmt.Sprintf("ClientResponseNot200Error: code: %d, message: %s", e.ClientResponseCode, e.ClientResponseBody)
+	if e.Err != nil {
+		mess += "; error: " + e.Err.Error()
+	}
+
+	return mess
 }
