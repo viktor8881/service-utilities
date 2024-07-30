@@ -9,6 +9,7 @@ require (
 	github.com/prometheus/client_golang v1.19.1
 	go.mongodb.org/mongo-driver v1.16.0
 	go.uber.org/zap v1.27.0
+	gopkg.in/telebot.v3 v3.3.6
 )
 
 require (
