@@ -22,7 +22,9 @@ func NewCustomBot(settings telebot.Settings) (*CustomBot, error) {
 
 func (b *CustomBot) AddCommandHandler(
 	command any,
+	in interface{},
 	handlerFn func(c telebot.Context, in any) (any, error),
+	encodeFn func(c telebot.Context, outDto any) error,
 	logger *zap.Logger,
 	middlewares ...Middleware,
 ) {
@@ -30,11 +32,12 @@ func (b *CustomBot) AddCommandHandler(
 
 		h := &handler{
 			command:   command,
+			in:        in,
 			decodeFn:  decodePayload,
 			handlerFn: handlerFn,
-			//encodeFn: decodePayload,
-			errorFn: errorFunction,
-			logger:  logger,
+			encodeFn:  encodeFn,
+			errorFn:   errorFunction,
+			logger:    logger,
 		}
 		return h.ServeTbot(c)
 
@@ -51,25 +54,17 @@ func decodePayload(payload string, in interface{}) error {
 	return json.Unmarshal([]byte(payload), in)
 }
 
-// Пример функции encodeFn
-func encodeOutput(out interface{}) (string, error) {
+func EncodeOutput(c telebot.Context, out interface{}) error {
 	encoded, err := json.Marshal(out)
 	if err != nil {
-		return "", err
+		return err
 	}
-	return string(encoded), nil
+	return c.Send(string(encoded))
 }
-
-// Пример функции handlerFn
-//func handlerFunction(ctx telebot.Context, in interface{}) (interface{}, error) {
-//	req := in.(*ListUserByEmailRequest)
-//	if req.Email == "someemail@dom.com" {
-//		return "User found", nil
-//	}
-//	return "User not found", nil
-//}
 
 func errorFunction(c telebot.Context, err error, logger *zap.Logger) {
 	logger.Error("Error", zap.Error(err))
-	c.Send("An error occurred")
+	if errSend := c.Send("An error occurred"); errSend != nil {
+		logger.Error("Error sending response", zap.Error(errSend), zap.Error(err))
+	}
 }
