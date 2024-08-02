@@ -3,24 +3,22 @@ package tbot
 import (
 	"go.uber.org/zap"
 	"gopkg.in/telebot.v3"
-	"net/http"
 	"reflect"
 )
 
-type ErrorHandlerFunc func(
-	w http.ResponseWriter,
-	r *http.Request,
-	err error,
-	logger *zap.Logger,
-)
+type DecodePayloadFunc func(payload string, in interface{}) error
+type HandlerFunc func(c telebot.Context, in any) (any, error)
+type EncodeResponseFunc func(c telebot.Context, outDto any) error
+type ErrorHandlerFunc func(c telebot.Context, err error, logger *zap.Logger)
+type Middleware func(next telebot.HandlerFunc) telebot.HandlerFunc
 
 type handler struct {
 	command   any
 	in        any
-	decodeFn  func(data string, inDto any) error
-	handlerFn func(c telebot.Context, in any) (any, error)
-	encodeFn  func(c telebot.Context, outDto any) error
-	errorFn   func(c telebot.Context, err error, logger *zap.Logger)
+	decodeFn  DecodePayloadFunc
+	handlerFn HandlerFunc
+	encodeFn  EncodeResponseFunc
+	errorFn   ErrorHandlerFunc
 	logger    *zap.Logger
 }
 

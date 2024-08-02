@@ -8,21 +8,20 @@ import (
 	"reflect"
 )
 
-type ErrorHandlerFunc func(
-	w http.ResponseWriter,
-	r *http.Request,
-	err error,
-	logger *zap.Logger,
-)
+type DecodeRequestFunc func(req *http.Request, inDto any) error
+type HandlerFunc func(ctx context.Context, in any) (any, error)
+type EncodeResponseFunc func(res http.ResponseWriter, outDto any) error
+type ErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, err error, logger *zap.Logger)
+type Middleware func(http.Handler) http.Handler
 
 type handler struct {
 	path      string
 	method    string
 	in        any
-	decodeFn  func(req *http.Request, inDto any) error
-	handlerFn func(ctx context.Context, in any) (any, error)
-	encodeFn  func(res http.ResponseWriter, outDto any) error
-	errorFn   func(w http.ResponseWriter, r *http.Request, err error, logger *zap.Logger)
+	decodeFn  DecodeRequestFunc
+	handlerFn HandlerFunc
+	encodeFn  EncodeResponseFunc
+	errorFn   ErrorHandlerFunc
 	logger    *zap.Logger
 }
 

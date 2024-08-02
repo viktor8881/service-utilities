@@ -1,4 +1,4 @@
-package simplehttp
+package client
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// LoggingRoundTripper is an http.RoundTripper that logs requests and responses
+// LoggingRoundTripper is a http.RoundTripper that logs requests and responses
 type LoggingRoundTripper struct {
 	Proxied   http.RoundTripper
 	Logger    *zap.Logger
@@ -32,14 +32,14 @@ func (lrt *LoggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 		req.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 	}
 
-	lrt.Logger.Info("--> inner request send",
+	lrt.Logger.Info("httpclient: send request",
 		zap.String("url", req.Method+": "+req.URL.String()),
 		zap.String("requestBody", string(requestBody)),
 	)
 
 	resp, err := lrt.Proxied.RoundTrip(req)
 	if err != nil {
-		lrt.Logger.Info("--> inner request error",
+		lrt.Logger.Info("httpclient: request error",
 			zap.String("url", req.Method+": "+req.URL.String()),
 			zap.String("requestBody", string(requestBody)),
 			zap.Error(err),
@@ -50,7 +50,7 @@ func (lrt *LoggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 
 	if lrt.TurnOnAll {
 		duration := time.Since(start)
-		lrt.Logger.Info("--> inner request success",
+		lrt.Logger.Info("httpclient: request processed",
 			zap.String("url", req.Method+": "+req.URL.String()),
 			zap.String("requestBody", string(requestBody)),
 			zap.String("StatusResponse", resp.Status),

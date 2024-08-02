@@ -1,11 +1,11 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"github.com/go-playground/form"
 	"go.uber.org/zap"
+	"io"
 	"net/http"
 	"reflect"
 )
@@ -13,8 +13,6 @@ import (
 type Transport struct {
 	mux *http.ServeMux
 }
-
-type Middleware func(http.Handler) http.Handler
 
 func NewTransport(mux *http.ServeMux) *Transport {
 	return &Transport{
@@ -26,7 +24,10 @@ func (t *Transport) AddEndpoint(
 	path string,
 	method string,
 	in interface{},
-	handlerFn func(ctx context.Context, in interface{}) (interface{}, error),
+	decReqFn DecodeRequestFunc,
+	handlerFn HandlerFunc,
+	encResFn EncodeResponseFunc,
+	errHandlerFn ErrorHandlerFunc,
 	logger *zap.Logger,
 	middlewares ...Middleware,
 ) {
@@ -34,10 +35,10 @@ func (t *Transport) AddEndpoint(
 		path,
 		method,
 		in,
-		t.decodeRequest,
+		decReqFn,
 		handlerFn,
-		t.encodeResponse,
-		ErrorHandler,
+		encResFn,
+		errHandlerFn,
 		logger,
 	}
 
@@ -46,7 +47,7 @@ func (t *Transport) AddEndpoint(
 	t.mux.Handle(path, wrappedHandler)
 }
 
-func (t *Transport) encodeResponse(res http.ResponseWriter, outDto any) error {
+func EncodeResponse(res http.ResponseWriter, outDto any) error {
 	res.Header().Set("Content-Type", "application/json")
 
 	encoder := json.NewEncoder(res)
@@ -56,7 +57,7 @@ func (t *Transport) encodeResponse(res http.ResponseWriter, outDto any) error {
 	return nil
 }
 
-func (t *Transport) decodeRequest(r *http.Request, inDto any) error {
+func DecodeRequest(r *http.Request, inDto any) error {
 	if reflect.TypeOf(inDto).Kind() != reflect.Ptr {
 		return &CustomError{
 			Err:         errors.New("input must be a pointer"),
@@ -85,6 +86,66 @@ func (t *Transport) decodeRequest(r *http.Request, inDto any) error {
 	}
 
 	return nil
+}
+
+func ErrorHandler(w http.ResponseWriter,
+	r *http.Request,
+	err error,
+	logger *zap.Logger,
+) {
+	var customError *CustomError
+
+	var code int
+	var message string
+
+	switch {
+	case errors.As(err, &customError):
+		code = customError.HttpCode
+		message = customError.HttpMessage
+	default:
+		code = http.StatusInternalServerError
+		message = "internal server error"
+	}
+
+	var bodyStr string
+	if r.Body != nil {
+		body, _ := io.ReadAll(r.Body)
+		defer func() {
+			err := r.Body.Close()
+			if err != nil {
+				logger.Error("httpserver: error while closing request body", zap.Error(err))
+			}
+		}()
+
+		bodyStr = string(body)
+	} else {
+		bodyStr = r.URL.Query().Encode()
+	}
+
+	zapFields := []zap.Field{
+		zap.String("url", r.Method+": "+r.URL.String()),
+		zap.String("body", bodyStr),
+		zap.Int("httpCode2user", code),
+		zap.String("httpBody2user", message),
+	}
+	if err != nil {
+		zapFields = append(zapFields, zap.Error(err))
+	}
+
+	logger.Error("httpserver: error "+message, zapFields...)
+
+	w.WriteHeader(code)
+
+	if code >= 400 && code < 500 {
+		errorResponse := struct {
+			Message string `json:"message"`
+		}{
+			Message: message,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(&errorResponse)
+	}
+
 }
 
 func applyMiddleware(h http.Handler, middlewares ...Middleware) http.Handler {

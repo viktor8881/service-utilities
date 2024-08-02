@@ -12,7 +12,7 @@ func LoggerMiddleware(logger *zap.Logger) func(next telebot.HandlerFunc) telebot
 		return func(c telebot.Context) error {
 			start := time.Now()
 
-			logger.Info("--> Tbot incoming request",
+			logger.Info("tbot: incoming request",
 				zap.String("user", c.Sender().FirstName+" "+c.Sender().LastName),
 				zap.String("text", c.Text()),
 			)
@@ -20,7 +20,7 @@ func LoggerMiddleware(logger *zap.Logger) func(next telebot.HandlerFunc) telebot
 			err := next(c)
 
 			duration := time.Since(start)
-			logger.Info("--> Tbot request processed",
+			logger.Info("tbot: request processed",
 				zap.Int64("user_id", c.Sender().ID),
 				zap.String("user", c.Sender().FirstName+" "+c.Sender().LastName),
 				zap.String("text", c.Text()),

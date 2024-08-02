@@ -6,41 +6,40 @@ import (
 	"gopkg.in/telebot.v3"
 )
 
-type CustomBot struct {
+type Bot struct {
 	*telebot.Bot
 }
 
-type Middleware func(next telebot.HandlerFunc) telebot.HandlerFunc
-
-func NewCustomBot(settings telebot.Settings) (*CustomBot, error) {
+func NewBot(settings telebot.Settings) (*Bot, error) {
 	bot, err := telebot.NewBot(settings)
 	if err != nil {
 		return nil, err
 	}
-	return &CustomBot{Bot: bot}, nil
+	return &Bot{Bot: bot}, nil
 }
 
-func (b *CustomBot) AddCommandHandler(
+func (b *Bot) AddCommandHandler(
 	command any,
 	in interface{},
-	handlerFn func(c telebot.Context, in any) (any, error),
-	encodeFn func(c telebot.Context, outDto any) error,
+	decodeFn DecodePayloadFunc,
+	handlerFn HandlerFunc,
+	encodeFn EncodeResponseFunc,
+	errHandlerFn ErrorHandlerFunc,
 	logger *zap.Logger,
 	middlewares ...Middleware,
 ) {
 	wrappedHandler := func(c telebot.Context) error {
-
 		h := &handler{
 			command:   command,
 			in:        in,
-			decodeFn:  decodePayload,
+			decodeFn:  decodeFn,
 			handlerFn: handlerFn,
 			encodeFn:  encodeFn,
-			errorFn:   errorFunction,
+			errorFn:   errHandlerFn,
 			logger:    logger,
 		}
-		return h.ServeTbot(c)
 
+		return h.ServeTbot(c)
 	}
 
 	for _, middleware := range middlewares {
@@ -50,11 +49,11 @@ func (b *CustomBot) AddCommandHandler(
 	b.Handle(command, wrappedHandler)
 }
 
-func decodePayload(payload string, in interface{}) error {
+func DecodePayload(payload string, in interface{}) error {
 	return json.Unmarshal([]byte(payload), in)
 }
 
-func encodeOutput(c telebot.Context, out interface{}) error {
+func EncodeResponse(c telebot.Context, out interface{}) error {
 	encoded, err := json.Marshal(out)
 	if err != nil {
 		return err
@@ -62,7 +61,10 @@ func encodeOutput(c telebot.Context, out interface{}) error {
 	return c.Send(string(encoded))
 }
 
-func errorFunction(c telebot.Context, err error, logger *zap.Logger) {
-	logger.Error("Error", zap.Error(err))
-	c.Send("An error occurred")
+func ErrorHandler(c telebot.Context, err error, logger *zap.Logger) {
+	logger.Error("tbot: Error", zap.Error(err))
+	errSend := c.Send("An error occurred")
+	if err != nil {
+		logger.Error("tbot: Error send error information", zap.Error(errSend))
+	}
 }

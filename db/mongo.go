@@ -58,98 +58,102 @@ func NewMongoDb(ctx context.Context, cfg DatabaseConfig, logger *zap.Logger) (*M
 
 func (db *MongoDB) Get(ctx context.Context, name string, collection string, dest interface{}, bsonFilter bson.M) error {
 	fields := []zap.Field{zap.String("command", name), zap.String("collection", collection), zap.Any("args", bsonFilter)}
-	db.logger.Info("Executing Get operation", fields...)
+	db.logger.Info("mongo: Executing Get operation", fields...)
 
 	coll := db.Client.Database(db.dbName).Collection(collection)
 	err := coll.FindOne(ctx, bsonFilter).Decode(dest)
 	if err != nil {
 		if !errors.Is(err, mongo.ErrNoDocuments) {
-			db.logger.Error("Failed to execute Get operation", append(fields, zap.Error(err))...)
+			db.logger.Error("mongo: Failed to execute Get operation", append(fields, zap.Error(err))...)
 		}
 
 		return err
 	}
 
-	db.logger.Info("Get operation executed successfully", fields...)
+	db.logger.Info("mongo: Get operation executed successfully", fields...)
 	return nil
 }
 
 func (db *MongoDB) FetchAll(ctx context.Context, name string, collection string, dest interface{}, bsonFilter bson.M) error {
 	fields := []zap.Field{zap.String("command", name), zap.String("collection", collection), zap.Any("args", bsonFilter)}
-	db.logger.Info("Executing FetchAll operation", fields...)
+	db.logger.Info("mongo: Executing FetchAll operation", fields...)
 
 	coll := db.Client.Database(db.dbName).Collection(collection)
 	cursor, err := coll.Find(ctx, bsonFilter)
 	if err != nil {
-		db.logger.Error("Failed to execute FetchAll operation", append(fields, zap.Error(err))...)
+		db.logger.Error("mongo: Failed to execute FetchAll operation", append(fields, zap.Error(err))...)
 		return err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if cerr := cursor.Close(ctx); cerr != nil {
+			db.logger.Error("mongo: Failed to close cursor", zap.Error(cerr))
+		}
+	}()
 
 	if err := cursor.All(ctx, dest); err != nil {
-		db.logger.Error("Failed to decode FetchAll results", append(fields, zap.Error(err))...)
+		db.logger.Error("mongo: Failed to decode FetchAll results", append(fields, zap.Error(err))...)
 		return err
 	}
 
-	db.logger.Info("FetchAll operation executed successfully", fields...)
+	db.logger.Info("mongo: FetchAll operation executed successfully", fields...)
 	return nil
 }
 
 func (db *MongoDB) Create(ctx context.Context, name string, collection string, document interface{}) (string, error) {
 	fields := []zap.Field{zap.String("command", name), zap.String("database", db.dbName), zap.String("collection", collection), zap.Any("document", document)}
-	db.logger.Info("Executing Create operation", fields...)
+	db.logger.Info("mongo: Executing Create operation", fields...)
 
 	coll := db.Client.Database(db.dbName).Collection(collection)
 	result, err := coll.InsertOne(ctx, document)
 	if err != nil {
-		db.logger.Error("Failed to execute Create operation", append(fields, zap.Error(err))...)
+		db.logger.Error("mongo: Failed to execute Create operation", append(fields, zap.Error(err))...)
 		return "", err
 	}
 
 	insertedID := result.InsertedID.(primitive.ObjectID).Hex()
-	db.logger.Info("Create operation executed successfully", append(fields, zap.String("insertedID", insertedID))...)
+	db.logger.Info("mongo: Create operation executed successfully", append(fields, zap.String("insertedID", insertedID))...)
 
 	return insertedID, nil
 }
 
 func (db *MongoDB) Update(ctx context.Context, name string, collection string, filter, update bson.M) (int64, error) {
 	fields := []zap.Field{zap.String("command", name), zap.String("database", db.dbName), zap.String("collection", collection), zap.Any("filter", filter), zap.Any("update", update)}
-	db.logger.Info("Executing Update operation", fields...)
+	db.logger.Info("mongo: Executing Update operation", fields...)
 
 	coll := db.Client.Database(db.dbName).Collection(collection)
 	result, err := coll.UpdateMany(ctx, filter, update)
 	if err != nil {
-		db.logger.Error("Failed to execute Update operation", append(fields, zap.Error(err))...)
+		db.logger.Error("mongo: Failed to execute Update operation", append(fields, zap.Error(err))...)
 		return 0, err
 	}
 
-	db.logger.Info("Update operation executed successfully", fields...)
+	db.logger.Info("mongo: Update operation executed successfully", fields...)
 	return result.ModifiedCount, nil
 }
 
 func (db *MongoDB) Delete(ctx context.Context, name string, collection string, filter bson.M) (int64, error) {
 	fields := []zap.Field{zap.String("command", name), zap.String("database", db.dbName), zap.String("collection", collection), zap.Any("filter", filter)}
-	db.logger.Info("Executing Delete operation", fields...)
+	db.logger.Info("mongo: Executing Delete operation", fields...)
 
 	coll := db.Client.Database(db.dbName).Collection(collection)
 	result, err := coll.DeleteMany(ctx, filter)
 	if err != nil {
-		db.logger.Error("Failed to execute Delete operation", append(fields, zap.Error(err))...)
+		db.logger.Error("mongo: Failed to execute Delete operation", append(fields, zap.Error(err))...)
 		return 0, err
 	}
 
-	db.logger.Info("Delete operation executed successfully", fields...)
+	db.logger.Info("mongo: Delete operation executed successfully", fields...)
 	return result.DeletedCount, nil
 }
 
 type TxMongoFunc func(sessCtx mongo.SessionContext) error
 
 func (db *MongoDB) ExecuteTx(ctx context.Context, name string, txFunc TxMongoFunc) error {
-	db.logger.Info("Executing operation in transaction", zap.String("command", name))
+	db.logger.Info("mongo: Executing operation in transaction", zap.String("command", name))
 
 	session, err := db.Client.StartSession()
 	if err != nil {
-		db.logger.Error("Failed to start session", zap.Error(err))
+		db.logger.Error("mongo: Failed to start session", zap.Error(err))
 		return err
 	}
 	defer session.EndSession(ctx)
@@ -160,17 +164,17 @@ func (db *MongoDB) ExecuteTx(ctx context.Context, name string, txFunc TxMongoFun
 		}
 
 		if err := txFunc(sessCtx); err != nil {
-			db.logger.Error("Transaction function failed", zap.Error(err))
+			db.logger.Error("mongo: Transaction function failed", zap.Error(err))
 			_ = session.AbortTransaction(sessCtx)
 			return err
 		}
 
 		if err := session.CommitTransaction(sessCtx); err != nil {
-			db.logger.Error("Failed to commit transaction", zap.Error(err))
+			db.logger.Error("mongo: Failed to commit transaction", zap.Error(err))
 			return err
 		}
 
-		db.logger.Info("Transaction executed successfully")
+		db.logger.Info("mongo: Transaction executed successfully")
 		return nil
 	})
 

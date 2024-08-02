@@ -1,4 +1,4 @@
-package simplehttp
+package client
 
 import (
 	"bytes"
@@ -14,13 +14,13 @@ import (
 	"time"
 )
 
-type SimpleClient struct {
+type Client struct {
 	httpClient *http.Client
 	baseURL    string
 }
 
-func NewSimpleClient(baseURL string, timeout time.Duration, transport http.RoundTripper) *SimpleClient {
-	return &SimpleClient{
+func NewClient(baseURL string, timeout time.Duration, transport http.RoundTripper) *Client {
+	return &Client{
 		httpClient: &http.Client{
 			Timeout:   timeout,
 			Transport: transport,
@@ -29,7 +29,7 @@ func NewSimpleClient(baseURL string, timeout time.Duration, transport http.Round
 	}
 }
 
-func (c *SimpleClient) Get(ctx context.Context, endpoint string, in interface{}, headers map[string]string) (*http.Response, error) {
+func (c *Client) Get(ctx context.Context, endpoint string, in interface{}, headers map[string]string) (*http.Response, error) {
 	pathUrl, err := BuildURL(c.baseURL+endpoint, in)
 	if err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func (c *SimpleClient) Get(ctx context.Context, endpoint string, in interface{},
 	return c.doRequest(req)
 }
 
-func (c *SimpleClient) Delete(ctx context.Context, endpoint string, in interface{}, headers map[string]string) (*http.Response, error) {
+func (c *Client) Delete(ctx context.Context, endpoint string, in interface{}, headers map[string]string) (*http.Response, error) {
 	pathUrl, err := BuildURL(c.baseURL+endpoint, in)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func (c *SimpleClient) Delete(ctx context.Context, endpoint string, in interface
 	return c.doRequest(req)
 }
 
-func (c *SimpleClient) Post(ctx context.Context, endpoint string, body interface{}, headers map[string]string) (*http.Response, error) {
+func (c *Client) Post(ctx context.Context, endpoint string, body interface{}, headers map[string]string) (*http.Response, error) {
 	jsonData, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (c *SimpleClient) Post(ctx context.Context, endpoint string, body interface
 	return c.doRequest(req)
 }
 
-func (c *SimpleClient) Put(ctx context.Context, endpoint string, body interface{}, headers map[string]string) (*http.Response, error) {
+func (c *Client) Put(ctx context.Context, endpoint string, body interface{}, headers map[string]string) (*http.Response, error) {
 	jsonData, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -103,11 +103,11 @@ func (c *SimpleClient) Put(ctx context.Context, endpoint string, body interface{
 	return c.doRequest(req)
 }
 
-func (c *SimpleClient) Close() {
+func (c *Client) Close() {
 	c.httpClient.CloseIdleConnections()
 }
 
-func (c *SimpleClient) doRequest(req *http.Request) (*http.Response, error) {
+func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -115,7 +115,11 @@ func (c *SimpleClient) doRequest(req *http.Request) (*http.Response, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
-		defer resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		err = resp.Body.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -146,9 +150,9 @@ func BuildURL(template string, input interface{}) (string, error) {
 		// path params /user/{id}/profile/{name}
 		for i := 0; i < t.NumField(); i++ {
 			fieldName := t.Field(i).Name
-			placeholderLower := "{" + strings.ToLower(fieldName) + "}"
+			placeholder := "{" + strings.ToLower(fieldName) + "}"
 			fieldValue := fmt.Sprintf("%v", v.FieldByName(fieldName).Interface())
-			template = strings.ReplaceAll(template, placeholderLower, fieldValue)
+			template = strings.ReplaceAll(template, placeholder, fieldValue)
 		}
 	} else {
 		// query params url?id=1&name=John

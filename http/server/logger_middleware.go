@@ -43,7 +43,7 @@ func LoggerMiddleware(logger *zap.Logger) func(next http.Handler) http.Handler {
 				r.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 			}
 
-			logger.Info("<-- request send",
+			logger.Info("httpserver: incoming request",
 				zap.String("url", r.Method+": "+r.URL.String()),
 				zap.String("requestBody", string(requestBody)),
 			)
@@ -52,7 +52,7 @@ func LoggerMiddleware(logger *zap.Logger) func(next http.Handler) http.Handler {
 			next.ServeHTTP(lrw, r)
 
 			duration := time.Since(start)
-			logger.Info("<-- request success",
+			logger.Info("httpserver: request processed",
 				zap.String("url", r.Method+": "+r.URL.String()),
 				zap.String("requestBody", string(requestBody)),
 				zap.Int("StatusResponse", lrw.statusCode),
