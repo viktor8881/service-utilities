@@ -3,7 +3,15 @@ package tbot
 import (
 	"go.uber.org/zap"
 	"gopkg.in/telebot.v3"
+	"net/http"
 	"reflect"
+)
+
+type ErrorHandlerFunc func(
+	w http.ResponseWriter,
+	r *http.Request,
+	err error,
+	logger *zap.Logger,
 )
 
 type handler struct {

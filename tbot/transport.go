@@ -54,7 +54,7 @@ func decodePayload(payload string, in interface{}) error {
 	return json.Unmarshal([]byte(payload), in)
 }
 
-func EncodeOutput(c telebot.Context, out interface{}) error {
+func encodeOutput(c telebot.Context, out interface{}) error {
 	encoded, err := json.Marshal(out)
 	if err != nil {
 		return err
@@ -64,7 +64,5 @@ func EncodeOutput(c telebot.Context, out interface{}) error {
 
 func errorFunction(c telebot.Context, err error, logger *zap.Logger) {
 	logger.Error("Error", zap.Error(err))
-	if errSend := c.Send("An error occurred"); errSend != nil {
-		logger.Error("Error sending response", zap.Error(errSend), zap.Error(err))
-	}
+	c.Send("An error occurred")
 }
