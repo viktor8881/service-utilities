@@ -10,7 +10,6 @@ import (
 	"go.uber.org/zap"
 	"net/url"
 	"strings"
-	"time"
 )
 
 type MongoDB struct {
@@ -20,6 +19,11 @@ type MongoDB struct {
 }
 
 func NewMongoDb(ctx context.Context, cfg DatabaseConfig, logger *zap.Logger) (*MongoDB, func(), error) {
+	if err := cfg.Validate(); err != nil {
+		logger.Error("Invalid database configuration", zap.Error(err))
+		return nil, nil, err
+	}
+
 	dbName, err := extractDatabaseName(cfg.DSN)
 	if err != nil {
 		logger.Error("Failed to extract database name from DSN", zap.Error(err))
@@ -27,9 +31,9 @@ func NewMongoDb(ctx context.Context, cfg DatabaseConfig, logger *zap.Logger) (*M
 	}
 
 	clientOpts := options.Client().ApplyURI(cfg.DSN).
-		SetMaxPoolSize(uint64(cfg.SetMaxOpenConns)).             // SetMaxOpenConns аналог
-		SetMinPoolSize(uint64(cfg.SetMaxIdleConns)).             // SetMaxIdleConns аналог
-		SetMaxConnIdleTime(cfg.SetConnMaxLifetime * time.Minute) // SetConnMaxLifetime аналог
+		SetMaxPoolSize(uint64(cfg.SetMaxOpenConns)).
+		SetMinPoolSize(uint64(cfg.SetMaxIdleConns)).
+		SetConnectTimeout(cfg.SetConnMaxLifetime)
 
 	client, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
