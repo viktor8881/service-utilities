@@ -23,7 +23,7 @@ type handler struct {
 }
 
 func (h *handler) ServeTbot(c telebot.Context) error {
-	payload := c.Message().Payload
+	payload := c.Text()
 
 	inDto := reflect.New(reflect.TypeOf(h.in).Elem()).Interface()
 	if len(payload) > 0 && h.in != nil && h.decodeFn != nil {
