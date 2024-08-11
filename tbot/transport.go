@@ -64,7 +64,7 @@ func EncodeResponse(c telebot.Context, out interface{}) error {
 func ErrorHandler(c telebot.Context, err error, logger *zap.Logger) {
 	logger.Error("tbot: Error", zap.Error(err))
 	errSend := c.Send("An error occurred")
-	if err != nil {
+	if errSend != nil {
 		logger.Error("tbot: Error send error information", zap.Error(errSend))
 	}
 }
